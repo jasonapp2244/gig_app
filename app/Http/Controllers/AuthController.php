@@ -73,6 +73,7 @@ class AuthController extends Controller
                 'otp'   => 'required',
             ]);
 
+            // dd($request->toArray());
             $user = User::where('email', $request->email)->first();
 
             if (!$user || $user->otp !== $request->otp) {
