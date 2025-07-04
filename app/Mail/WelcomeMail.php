@@ -5,7 +5,6 @@ namespace App\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
-use App\Mail\WelcomeMail;
 
 class WelcomeMail extends Mailable
 {
@@ -23,6 +22,6 @@ class WelcomeMail extends Mailable
     public function build()
     {
         return $this->subject('Welcome to Task Scheduler - Verify Your Email')
-                    ->view('emails.welcome');
+                    ->view('mails.welcome');
     }
 }

@@ -1,246 +1,230 @@
 <?php
-
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\AuthRequest;
+use App\Mail\{
+    WelcomeMail,
+    PasswordResetMail,
+    NewUserNotificationMail
+};
 use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use App\Mail\SendOtpMail;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
-
-    public function signup(Request $request)
-    {
-
-        try {
-            $validator = Validator::make($request->all(), [
-                'name'         => 'required|string',
-                'email'        => 'required|email|unique:users,email',
-                'password'     => 'required|string|min:6',
-                'phone_number' => 'required|string',
-            ]);
-
-
-            // dd($validator);
-
-            if ($validator->fails()) {
-                return response()->json(['status' => false, 'code' => 422, 'message' => $validator->errors()->first()]);
-            }
-
-            $otp = rand(10000, 9999);
-            // return response()->json(['otp' => $otp]);
-            // dd($otp);
-
-            $user = User::create([
-                'name'             => $request->name,
-                'email'            => $request->email,
-                'password'         => Hash::make($request->password),
-                'phone_number'     => $request->phone_number,
-                'otp'              => $otp,
-                'otp_status'       => 'unverified',
-                'otp_expires_at'   => now()->addMinutes(10),
-            ]);
-
-            // Mail::to($user->email)->send(new SendOtpMail($user->name, $otp));
-
+    /**
+     * Register new user with OTP verification
+     */
+public function signup(AuthRequest $request): JsonResponse
+{
+    try {
+        // Check if user already exists
+        if (User::where('email', $request->email)->exists()) {
             return response()->json([
-                'status' => true,
-                'otp' => $otp,
-                'message' => 'OTP sent to your email.'
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json(
-                [
-                    'status' => false,
-                    'message' => $e->getMessage()
-                ],
-                500
-            );
+                'status' => false,
+                'message' => 'Registration failed',
+                'errors' => [
+                    'email' => ['This email is already registered.']
+                ]
+            ], 422);
         }
-    }
 
-    public function verifyOtp(Request $request)
+        if (User::where('phone_number', $request->phone_number)->exists()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Registration failed',
+                'errors' => [
+                    'phone_number' => ['This phone number is already registered.']
+                ]
+            ], 422);
+        }
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'phone_number' => $request->phone_number,
+            'otp' => rand(100000, 999999),
+            'otp_expires_at' => now()->addMinutes(10),
+        ]);
+
+        // First send welcome email to user
+        Mail::to($user->email)->send(new WelcomeMail($user, $user->otp));
+
+        // Then notify admin (without waiting)
+        $adminEmail = "noumanzindanii@gmail.com";
+        if ($adminEmail) {
+            Mail::to($adminEmail)->queue(new NewUserNotificationMail($user));
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'OTP sent to your email',
+            'data' => ['email' => $user->email]
+        ], 201);
+
+    } catch (\Exception $e) {
+        return $this->handleError($e, 'Registration failed');
+    }
+}
+
+    /**
+     * Verify OTP for email verification
+     */
+    public function verifyOtp(AuthRequest $request): JsonResponse
     {
         try {
-            $request->validate([
-                'email' => 'required|email',
-                'otp'   => 'required',
-            ]);
+            $user = User::where('email', $request->email)->firstOrFail();
 
-            // dd($request->toArray());
-            $user = User::where('email', $request->email)->first();
-
-            if (!$user || $user->otp !== $request->otp) {
-                return response()->json(['status' => false, 'code' => 422, 'message' => 'Invalid OTP.']);
+            if ($user->otp !== $request->otp) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Invalid OTP'
+                ], 422);
             }
 
             if (Carbon::parse($user->otp_expires_at)->isPast()) {
-                return response()->json(['status' => false, 'code' => 422, 'message' => 'OTP has expired.']);
+                return response()->json([
+                    'status' => false,
+                    'message' => 'OTP has expired'
+                ], 422);
             }
 
             $user->update([
-                'otp_status' => 'verified',
                 'email_verified_at' => now(),
                 'otp' => null,
                 'otp_expires_at' => null,
             ]);
 
-            return response()->json(['status' => true, 'code' => 200, 'message' => 'Email verified successfully.']);
+            return response()->json([
+                'status' => true,
+                'message' => 'Email verified successfully',
+                'token' => $user->createToken('auth_token')->plainTextToken,
+                'user' => $user->only(['id', 'name', 'email', 'phone_number'])
+            ]);
         } catch (\Exception $e) {
-            return response()->json(['status' => false, 'code' => 500, 'message' => $e->getMessage()]);
+            return $this->handleError($e, 'OTP verification failed');
         }
     }
-    public function resendOtp(Request $request)
+
+    /**
+     * Authenticate user
+     */
+    public function login(AuthRequest $request): JsonResponse
     {
         try {
-            $request->validate(['email' => 'required|email']);
-
             $user = User::where('email', $request->email)->first();
-            if (!$user) {
-                return response()->json(['status' => false, 'code' => 404, 'message' => 'User not found.']);
+
+            if (!$user || !Hash::check($request->password, $user->password)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Invalid credentials'
+                ], 401);
             }
 
-            $otp = rand(100000, 999999);
-
-            $user->update([
-                'otp' => $otp,
-                'otp_expires_at' => now()->addMinutes(10),
-                'otp_status' => 'unverified',
-            ]);
-
-            Mail::to($user->email)->send(new SendOtpMail($user->name, $otp));
-
-            return response()->json(['status' => true, 'code' => 200, 'message' => 'OTP resent successfully.']);
-        } catch (\Exception $e) {
-            return response()->json(['status' => false, 'code' => 500, 'message' => $e->getMessage()]);
-        }
-    }
-
-    public function login(Request $request)
-    {
-        try {
-            $request->validate([
-                'email' => 'required|email',
-                'password' => 'nullable|string',
-                'service_provider' => 'nullable|string',
-                'service_provider_id' => 'nullable|string',
-            ]);
-
-
-            if ($request->filled('service_provider') && $request->filled('service_provider_id')) {
-                $user = User::firstOrCreate(
-                    ['service_provider_id' => $request->service_provider_id],
-                    [
-                        'name'              => $request->name ?? 'No Name',
-                        'email'             => $request->email ?? null,
-                        'service_provider'  => $request->service_provider,
-                        'email_verified_at' => now(),
-                        'profile_image'     => $request->profile_image ?? null,
-                    ]
-                );
-            } else {
-
-                $user = User::where('email', $request->email)->first();
-                if (!$user || !Hash::check($request->password, $user->password)) {
-                    return response()->json(['status' => false, 'code' => 401, 'message' => 'Invalid credentials.']);
-                }
+            if (!$user->hasVerifiedEmail()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Please verify your email first'
+                ], 403);
             }
-
-            $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
                 'status' => true,
-                'code' => 200,
-                'message' => 'Login successful.',
-                'token' => $token,
-                'user' => $user
+                'message' => 'Login successful',
+                'token' => $user->createToken('auth_token')->plainTextToken,
+                'user' => $user->only(['id', 'name', 'email', 'phone_number'])
             ]);
         } catch (\Exception $e) {
-            return response()->json(['status' => false, 'code' => 500, 'message' => $e->getMessage()]);
-        }
-    }
-    public function forgotPassword(Request $request)
-    {
-        try {
-            $request->validate(['email' => 'required|email']);
-            $user = User::where('email', $request->email)->first();
-
-            if (!$user) {
-                return response()->json(['status' => false, 'code' => 404, 'message' => 'User not found.']);
-            }
-
-            $newPassword = Str::random(8);
-            $user->update([
-                'password' => Hash::make($newPassword),
-                'last_password_reset_at' => now(),
-            ]);
-
-            Mail::raw("Your new password is: $newPassword", function ($message) use ($user) {
-                $message->to($user->email)
-                    ->subject('Your New Password');
-            });
-
-            return response()->json([
-                'status'  => true,
-                'code'    => $newPassword,
-                'message' => 'New Password sent successfully to your email.',
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['status' => false, 'code' => 500, 'message' => $e->getMessage()]);
+            return $this->handleError($e, 'Login failed');
         }
     }
 
-    public function resetPassword(Request $request)
+    /**
+     * Handle forgot password request
+     */
+    public function forgotPassword(AuthRequest $request): JsonResponse
     {
         try {
-            $request->validate([
-                'email' => 'required|email',
-                'old_password' => 'required|string',
-                'new_password' => 'required|string|min:6|confirmed',
-            ]);
-
-            $user = User::where('email', $request->email)->first();
-
-            if (!$user || !Hash::check($request->old_password, $user->password)) {
-                return response()->json([
-                    'status'  => false,
-                    'code'    => 401,
-                    'message' => 'Old password is incorrect or user not found.',
-                ]);
-            }
+            $user = User::where('email', $request->email)->firstOrFail();
+            $token = Str::random(60);
 
             $user->update([
-                'password' => Hash::make($request->new_password),
-                'last_password_reset_at' => now(),
+                'password_reset_token' => $token,
+                'password_reset_token_expires_at' => now()->addHours(1)
             ]);
 
+            $resetUrl = config('app.frontend_url') . '/reset-password?token=' . $token;
+
+            // Mail::to($user->email)->send(new PasswordResetMail($resetUrl));
+
             return response()->json([
-                'status'  => true,
-                'code'    => 200,
-                'message' => 'Password reset successfully.',
+                'status' => true,
+                'message' => 'Password reset link sent to your email'
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'status'  => false,
-                'code'    => 500,
-                'message' => $e->getMessage(),
-            ]);
+            return $this->handleError($e, 'Password reset failed');
         }
     }
 
-    public function logout(Request $request)
+    /**
+     * Reset password
+     */
+    public function resetPassword(AuthRequest $request): JsonResponse
     {
         try {
-            $request->user()->currentAccessToken()->delete();
-            return response()->json(['status' => true, 'code' => 200, 'message' => 'Logged out successfully.']);
+            $user = User::where('password_reset_token', $request->token)
+                ->where('password_reset_token_expires_at', '>', now())
+                ->firstOrFail();
+
+            $user->update([
+                'password' => Hash::make($request->password),
+                'password_reset_token' => null,
+                'password_reset_token_expires_at' => null,
+                'email_verified_at' => $user->email_verified_at ?? now() // Verify email if not already
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Password reset successfully'
+            ]);
         } catch (\Exception $e) {
-            return response()->json(['status' => false, 'code' => 500, 'message' => $e->getMessage()]);
+            return $this->handleError($e, 'Password reset failed');
         }
+    }
+
+    /**
+     * Logout user
+     */
+    public function logout(): JsonResponse
+    {
+        try {
+            auth()->user()->currentAccessToken()->delete();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Logged out successfully'
+            ]);
+        } catch (\Exception $e) {
+            return $this->handleError($e, 'Logout failed');
+        }
+    }
+
+    /**
+     * Handle errors consistently
+     */
+    private function handleError(\Exception $e, string $message): JsonResponse
+    {
+        return response()->json([
+            'status' => false,
+            'message' => $message,
+            'error' => config('app.debug') ? $e->getMessage() : null
+        ], 500);
     }
 }
