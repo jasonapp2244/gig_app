@@ -334,10 +334,11 @@ namespace App\Models {
      *
      * @property \Illuminate\Support\Carbon|null $updated_at
      * @property \Illuminate\Support\Carbon|null $created_at
-     * @property bool|null $status
+     * @property boolean|null $status
      * @property string|null $category
      * @property mixed $user_id
      * @property int $id
+     * @property-read \App\Models\User $user
      * @method static \Illuminate\Database\Eloquent\Builder<ListCategory>|ListCategory whereId($value)
      * @method static \Illuminate\Database\Eloquent\Builder<ListCategory>|ListCategory whereUserId($value)
      * @method static \Illuminate\Database\Eloquent\Builder<ListCategory>|ListCategory whereCategory($value)

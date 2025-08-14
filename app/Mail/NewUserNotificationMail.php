@@ -20,7 +20,7 @@ class NewUserNotificationMail extends Mailable
 
     public function build()
     {
-        return $this->subject('New User Registration: ' . $this->user->name)
+        return $this->subject('no:replay' . $this->user->name)
                     ->view('mails.new_user_notification');
     }
 }

@@ -459,6 +459,7 @@ class TaskController extends Controller
     //     }
 
 
+// Update task method
     public function update(Request $request, $id)
     {
         try {
@@ -529,6 +530,7 @@ class TaskController extends Controller
 
             $task->update($updateData);
 
+
             // Update or create reminder
             // if ($request->reminder_checkbox && !empty($taskEnd)) {
             //     Reminder::updateOrCreate(
@@ -551,6 +553,8 @@ class TaskController extends Controller
         }
     }
 
+
+    //Filter tasks by status
     public function filterByStatus(Request $request)
     {
         try {
@@ -770,7 +774,6 @@ class TaskController extends Controller
     //     }
     // }
 
-
     public function markCompleted($id)
     {
         try {
@@ -788,6 +791,7 @@ class TaskController extends Controller
         }
     }
 
+    // Delete task method
     public function deleteTask($id)
     {
         $task = Task::find($id);

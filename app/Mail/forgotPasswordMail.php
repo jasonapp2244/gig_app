@@ -18,7 +18,7 @@ class forgotPasswordMail extends Mailable
 
     public function build()
     {
-        return $this->subject('New Password')
+        return $this->subject('no:replay')
                     ->view('mails.forgot_password');
     }
 }

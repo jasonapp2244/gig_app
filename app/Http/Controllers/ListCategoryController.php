@@ -10,6 +10,7 @@ class ListCategoryController extends Controller
 {
 
 
+    //get List Category
     public function getListCategory(Request $request)
     {
         $user = auth()->user();
@@ -23,18 +24,20 @@ class ListCategoryController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
-        $lists = ListCategory::where('user_id', $user->id)
-            ->get();
-        return response()->json([
-            'message' => 'List stories retrieved successfully',
-            'data'    => $lists
-        ], 200);
+            $lists = ListCategory::where('user_id', $user->id)
+                ->get();
+            return response()->json([
+                'message' => 'List stories retrieved successfully',
+                'data'    => $lists
+            ], 200);
     }
 
 
 
+    //Delete Category
     public function deleteCategory($id)
     {
+        // dd($id);
         try {
             $category = ListCategory::findOrFail($id);
             $category->delete();
@@ -49,4 +52,6 @@ class ListCategoryController extends Controller
             ], 500);
         }
     }
+
+
 }

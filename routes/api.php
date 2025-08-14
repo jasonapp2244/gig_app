@@ -18,7 +18,7 @@ use App\Http\Controllers\ListReviewController;
 Route::get('test', function () {
     return response()->json([
         'status' => "done",
-        'message' => 'API is workingfdfdfdf'
+        'message' => 'API is working'
     ]);
 });
 
@@ -39,7 +39,7 @@ Route::get('/clear-cache', function () {
 
     return response()->json([
         'status' => 'success',
-        'message' => 'All caches cleared and optimized successfullyfdfdf.'
+        'message' => 'All caches cleared and optimized successfully.'
     ]);
 });
 
@@ -58,17 +58,16 @@ Route::prefix('auth')->name('auth.')->group(function () {
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
 
-    Route::post('update-fcm-tokens', [AuthController::class, 'updateFcmToken']);
-
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('reset-password');
     Route::post('/update-profile', [AuthController::class, 'updateProfile'])->name('update_profile');
 
+    // User Profile
     Route::get('/get-user', [AuthController::class, 'getUser'])->name('get_user');
 
     //Task Route
     Route::get('/tasks', [TaskController::class, 'index']);
     Route::post('/tasks', [TaskController::class, 'store']);
-    Route::put('/tasks/{id}', [TaskController::class, 'update']);
+    Route::put('/tasks/{id?}', [TaskController::class, 'update']);
     Route::post('/tasks-delete/{id}', [TaskController::class, 'deleteTask']);
     Route::post('tasks-status', [TaskController::class, 'filterByStatus']);
 
@@ -102,7 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //list Category
     Route::get('get-list-category', [ListCategoryController::class, 'getListCategory'])->name('get.list.category');
-    Route::post('delete-category{id}', [ListCategoryController::class, 'deleteCategory'])->name('delete.category');
+    Route::post('delete-category/{id}', [ListCategoryController::class, 'deleteCategory'])->name('delete.category');
 
     //list Commits
     Route::post('/add-list-commits', [listCommitController::class, 'addListCommits'])->name('add.list.commits');
@@ -112,6 +111,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('add-list-review', [ListReviewController::class, 'addListReview'])->name('add.list.review');
     Route::get('/get-list-reviews/{listId}', [ListReviewController::class, 'getListReviews'])->name('get.list.reviews');
 
+    //logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 

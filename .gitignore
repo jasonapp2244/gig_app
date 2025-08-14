@@ -1,4 +1,4 @@
 /storage
 /node_modules
-/vendo
+/vendor
 .env
