@@ -23,7 +23,7 @@ class TaskPaymentController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'No pending tasks found',
-            ], 404);
+            ], 400);
 
             }
             return response()->json([
@@ -31,6 +31,27 @@ class TaskPaymentController extends Controller
                 'message' => 'Pending tasks fetched successfully',
                 'data' => $tasks_payments,
             ], 200);
+    }
+
+
+    public function getTasksByStatus($task_status)
+    {
+        $tasks = TaskPayment::where('user_id', Auth::id())
+            ->where('payment_status', $task_status)
+            ->get();
+
+        if ($tasks->isEmpty()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No tasks found for the given status',
+            ], 400);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Tasks fetched successfully',
+            'data' => $tasks,
+        ], 200);
     }
 
 

@@ -79,6 +79,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Task Payment
     Route::get('get_tasks', [TaskPaymentController::class, 'getTasks']);
+    Route::get('get_tasks/{task_status}', [TaskPaymentController::class, 'getTasksByStatus']);
     Route::post('task-payment', [TaskPaymentController::class, 'taskPayment']);
 
     // Earning Route
